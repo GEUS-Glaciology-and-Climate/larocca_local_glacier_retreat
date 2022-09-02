@@ -1,0 +1,1101 @@
+#+TITLE: Nordgrønland 
+#+AUTHOR: Signe Hillerup Larsen
+#+EMAIL: shl@geus.dk
+#+DATE: {{{time(%Y-%m-%d)}}}
+#+DESCRIPTION: Student project by Max
+#+KEYWORDS:
+#+OPTIONS:   H:4 num:4 toc:nil \n:nil ::t |:t ^:{} -:t f:t *:t <:t
+#+EXCLUDE_TAGS: noexport
+#+ARCHIVE: ::* Archive
+
+#+PROPERTY: header-args :session *northgreenland-shell* :noweb yes 
+
+
+* Code 
+
+This code was initially developed for the LoweWater project under WISE.
+
+The catchments of interest are all collected in one single shapefile, I will see if I can handle that.
+
+
+*** python libraries
+
+#+NAME: load_libraries
+#+BEGIN_SRC ipython
+import xarray as xr
+import rioxarray 
+import matplotlib.pyplot as plt
+import pandas as pd
+import geopandas as gpd
+import rioxarray 
+from shapely.geometry import mapping
+import numpy as np
+from datetime import datetime
+from os import chdir
+from glob import glob
+import rasterstats as rs
+
+#+END_SRC
+
+#+RESULTS: load_libraries
+:results:
+# Out [20]: 
+:end:
+
+
+
+
+
+** MAR extraction
+
+
+
+*** Extract data
+#+BEGIN_SRC ipython
+<<load_libraries>>
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [1]: 
+:end:
+
+Making annual sums of the MAR data - this makes everything very much faster
+#+BEGIN_SRC ipython
+for year in range(1979,2020):
+    marpath = '/media/shl/Elements1/data/MARv3.11/monthly_era5_1km/MARv3.11-monthly-ERA5-'+str(year)+'.nc'
+    with xr.open_dataset(marpath,decode_times=False) as DS:
+        annual = DS['RF'].sum(dim = 'time')
+    
+        annual.to_netcdf('data/MARv3.11-annual_RF_ERA5_'+str(year)+'.nc')
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [2]: 
+:end:
+
+#+BEGIN_SRC ipython
+for year in range(1979,2020):
+    marpath = '/media/shl/Elements1/data/MARv3.11/monthly_era5_1km/MARv3.11-monthly-ERA5-'+str(year)+'.nc'
+    with xr.open_dataset(marpath,decode_times=False) as DS:
+        annual = DS['SF'].sum(dim = 'time')
+    
+        annual.to_netcdf('data/MARv3.11-annual_Sf_ERA5_'+str(year)+'.nc')
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [3]: 
+:end:
+
+
+
+**** Then extract the annual sum for each year and all the polygons
+
+#+BEGIN_SRC ipython
+gdf = gpd.read_file('RGI6_gperi_delin_vOct14_SpJoin7.shp' )
+
+melt = []
+years = []
+year = 2000
+
+unique_name_column = 'New_RGIid2'
+name = []
+for id in range(len(gdf[unique_name_column])):
+    name.append(gdf.iloc[id][unique_name_column])
+    
+snow = pd.DataFrame({'name':name})
+rain = pd.DataFrame({'name':name})
+
+for year in range(1979,2020):
+    mar_annual = 'data/MARv3.11-annual_RF_ERA5_'+str(year)+'.nc'
+    
+    zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':RF',
+                               stats='sum',
+                               band = 1, all_touched = True)
+
+
+    
+    stats = []
+    for id in range(len(zone_stat)):
+        stats.append(zone_stat[id]['sum'])
+
+
+    rain[str(year)] = stats
+
+    variable = 'SF'
+
+    mar_annual = 'data/MARv3.11-annual_Sf_ERA5_'+str(year)+'.nc'
+    zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='sum',
+                               band = 1, all_touched = True)
+    stats = []
+    
+    for id in range(len(zone_stat)):
+        stats.append(zone_stat[id]['sum'])
+    
+    snow[str(year)] = stats
+    
+snow.set_index('name', inplace =True)   
+rain.set_index('name', inplace =True)
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [6]: 
+:end:
+
+#+BEGIN_SRC ipython
+mar_annual = 'data/MARv3.11-annual_RF_ERA5_'+str(year)+'.nc'
+    
+zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                           raster='netcdf:'+mar_annual+':RF',
+                           stats='sum',
+                           band = 1, all_touched = True)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [7]: 
+:end:
+
+#+BEGIN_SRC ipython
+
+#unit is in mmWe/year
+#So we need to multiply by area to get it into m3
+
+rain_out = rain.T * 1000*1000*10**(-9)
+rain_out.index.name = 'year'
+#print(rain_out)
+rain_out.to_csv('results/rain_1979_2019_Gt_pr_year.csv', index=True)
+
+snow_out = snow.T * 1000*1000*10**(-9)
+snow_out.index.name = 'year'
+#print(snow_out)
+
+snow_out.to_csv('results/snow_1979_2019_Gt_pr_year.csv', index = True)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [25]: 
+:end:
+
+
+#+BEGIN_SRC ipython
+ax =rain_out.iloc[:,0].plot()
+snow_out.iloc[:,0].plot(ax=ax)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [26]: 
+
+
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/5b43cd7e41b4fee74801f95966e130b6f8e8bc5a/d6ff86562e63d8298f85f45b7b361a88c4b92348.png]]
+:end:
+
+
+#+BEGIN_SRC ipython
+mean1 = rain_out.loc['1978':'2002'].mean(axis = 0)
+sum1  = rain_out.loc['1978':'2002'].sum(axis = 0)
+mean2 = rain_out.loc['2003':'2008'].mean(axis = 0)
+sum2  = rain_out.loc['2003':'2008'].sum(axis = 0)
+mean3 = rain_out.loc['2009':'2017'].mean(axis = 0)
+sum3  = rain_out.loc['2009':'2017'].sum(axis = 0)
+
+
+stats = pd.DataFrame({'mean 1978 - 2002': mean1, 'mean 2003 - 2008': mean2, 'mean 2009 - 2017': mean3, 'sum 1978 - 2002': sum1, 'sum 2003 - 2008': sum2, 'sum 2009 - 2017': sum3})
+
+stats.T.to_csv('results/rain_stats_1979_2019.csv', index = True)
+
+
+mean1 = snow_out.loc['1978':'2002'].mean(axis = 0)
+sum1  = snow_out.loc['1978':'2002'].sum(axis = 0)
+mean2 = snow_out.loc['2003':'2008'].mean(axis = 0)
+sum2  = snow_out.loc['2003':'2008'].sum(axis = 0)
+mean3 = snow_out.loc['2009':'2017'].mean(axis = 0)
+sum3  = snow_out.loc['2009':'2017'].sum(axis = 0)
+
+
+stats = pd.DataFrame({'mean 1978 - 2002': mean1, 'mean 2003 - 2008': mean2, 'mean 2009 - 2017': mean3, 'sum 1978 - 2002': sum1, 'sum 2003 - 2008': sum2, 'sum 2009 - 2017': sum3})
+
+stats.T.to_csv('results/snow_stats_1979_2019.csv', index = True)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [27]: 
+:end:
+
+
+#+BEGIN_SRC ipython
+
+#unit is in mmWe/year
+#So we need to multiply by area to get it into m3
+
+precip_out = rain_out+snow_out
+precip_out.index.name = 'year'
+#print(rain_out)
+precip_out.to_csv('results/precipitation_1979_2019_Gt_pr_year.csv', index=True)
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [28]: 
+:end:
+
+
+#+BEGIN_SRC ipython
+mean1 = precip_out.loc['1978':'2002'].mean(axis = 0)
+sum1  = precip_out.loc['1978':'2002'].sum(axis = 0)
+mean2 = precip_out.loc['2003':'2008'].mean(axis = 0)
+sum2  = precip_out.loc['2003':'2008'].sum(axis = 0)
+mean3 = precip_out.loc['2009':'2017'].mean(axis = 0)
+sum3  = precip_out.loc['2009':'2017'].sum(axis = 0)
+
+
+stats = pd.DataFrame({'mean 1978 - 2002': mean1, 'mean 2003 - 2008': mean2, 'mean 2009 - 2017': mean3, 'sum 1978 - 2002': sum1, 'sum 2003 - 2008': sum2, 'sum 2009 - 2017': sum3})
+
+stats.T.to_csv('results/precip_stats_1979_2019.csv', index = True)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [29]: 
+:end:
+
+#+BEGIN_SRC ipython
+ax =rain_out.iloc[:,0].plot()
+snow_out.iloc[:,0].plot(ax=ax)
+precip_out.iloc[:,0].plot(ax=ax)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [30]: 
+
+
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/5b43cd7e41b4fee74801f95966e130b6f8e8bc5a/6a99875935f144f944d9e84714b44c4a4920f547.png]]
+:end:
+
+
+
+
+** Extracting data for Laura Larocca
+
+De ønsker data så langt tilbage som muligt:
+
+Måneds og årsværdier for:
+
+-Temp
+
+-Precip
+
+-Snow
+
+-total MB
+
+(runoff)
+
+
+Planen er:
+
+
+*** Shapefilen
+
+Unikt navn: new_ID
+
+**** reproject shpfiler til bamber projection
+ogr2ogr -f "ESRI Shapefile" -t_srs EPSG:NEW_EPSG_NUMBER -s_srs EPSG:OLD_EPSG_NUMBER output.shp input.shp
+
++proj=stere +ellps=WGS84 +datum=WGS84 +units=km +lat_ts=71 +lat_0=90 +lon_0=-39 +x_0=0 +y_0=0
+
+BEMÆRK enheden er km, så det passer til MAR
+
+Map Projection:Polar Stereographic Ellipsoid - Map Reference Latitude: 90.0 - Map Reference Longitude: -39.0 - Map Second Reference Latitude: 71.0 - Map Eccentricity: 0.081819190843 ;wgs84 - Map Equatorial Radius: 6378137.0 ;wgs84 meters - Grid Map Origin Column: 160 - Grid Map Origin Row: -120 - Grid Map Units per Cell: 5000 - Grid Width: 301 - Grid Height: 561
+
+#+BEGIN_SRC sh
+ogr2ogr -f "ESRI Shapefile" -t_srs "+proj=stere +ellps=WGS84 +datum=WGS84 +units=m +lat_ts=71 +lat_0=90 +lon_0=-39 +x_0=0 +y_0=0" -s_srs EPSG:4326 shp/larocca/polygon_larocca_bamberprj.shp shp/larocca/polygon_larocca.shp
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC sh
+ogr2ogr -f "ESRI Shapefile" -t_srs EPSG:3413 -s_srs EPSG:4326 shp/larocca/polygon_larocca_epsg3413.shp shp/larocca/polygon_larocca.shp
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC sh :results verbatim
+proj -l
+#+END_SRC
+
+
+
+
+*** Udtræk data fra en ny MAR version
+
+
+Problem with rioxarray and jupyter: Perhaps it will work with python
+
+If I don't get rioxarray to work, I need to figure out how to deal with affine when I run zonal_stats in open netcdf files.
+ #+BEGIN_SRC ipython :tangle extract_temp_MARv3.11.py 
+ <<load_libraries>>
+
+ gdf = gpd.read_file('shp/larocca/polygon_larocca_epsg3413.shp' )
+
+ unique_name_column = 'new_ID'
+ name = []
+ for idx,key in enumerate(gdf[unique_name_column]):
+     name.append(str(gdf.iloc[idx][unique_name_column]))
+
+ datapath = '/mnt/data/shl/data/MAR/3.11/monthly/'
+ filename = 'MAR'+version+'-monthly-ERA5-'
+ monthly_zone_stat = pd.DataFrame({})
+
+ for year in range(1987,2021):
+     mar = datapath + filename +str(year)+'.nc'
+     for month in range(12):
+         zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                      raster='netcdf:'+mar+':T2M'
+		      band = month+1,
+		      stats='mean',
+		      all_touched = True)
+
+          #print(zone_stat)
+         stats = pd.DataFrame(zone_stat)
+         monthly_zone_stat[str(year)+'-'+str(month+1)] = stats['mean']
+     print('year = '+ str(year))
+
+ results = monthly_zone_stat.T
+ results.index = pd.to_datetime(results.index, format = '%Y-%m')
+ results.columns = name
+ #print(results)
+ results.to_csv('csvs/MAR'+version+'_T2M_monthly_mean.csv')
+ results_annual = results.resample('Y').mean()
+ #print(results_annual)
+ results_annual.to_csv('csvs/MAR'+version+'_T2M_annual_mean.csv')
+ #+END_SRC
+
+ #+RESULTS:
+ :results:
+ # Out [19]: 
+ # output
+ ---------------------------------------------------------------------------
+ TypeError                                 Traceback (most recent call last)
+ /tmp/ipykernel_24774/35672561.py in <module>
+      30     with xr.open_dataset(mar,decode_times=False) as ds:
+      31         for month in range(12):
+ ---> 32             zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+      33                                 raster=ds.T2M,
+      34                                 stats='mean',
+
+ ~/miniconda3/envs/py38/lib/python3.8/site-packages/rasterstats/main.py in zonal_stats(*args, **kwargs)
+      29     The only difference is that ``zonal_stats`` will
+      30     return a list rather than a generator."""
+ ---> 31     return list(gen_zonal_stats(*args, **kwargs))
+      32 
+      33 
+
+ ~/miniconda3/envs/py38/lib/python3.8/site-packages/rasterstats/main.py in gen_zonal_stats(vectors, raster, layer, band, nodata, affine, stats, all_touched, categorical, category_map, add_stats, zone_func, raster_out, prefix, geojson_out, **kwargs)
+     144         band = band_num
+     145 
+ --> 146     with Raster(raster, affine, nodata, band) as rast:
+     147         features_iter = read_features(vectors, layer)
+     148         for _, feat in enumerate(features_iter):
+
+ ~/miniconda3/envs/py38/lib/python3.8/site-packages/rasterstats/io.py in __init__(self, raster, affine, nodata, band)
+     246             self.nodata = nodata
+     247         else:
+ --> 248             self.src = rasterio.open(raster, 'r')
+     249             self.affine = guard_transform(self.src.transform)
+     250             self.shape = (self.src.height, self.src.width)
+
+ ~/miniconda3/envs/py38/lib/python3.8/site-packages/rasterio/env.py in wrapper(*args, **kwds)
+     431 
+     432         with env_ctor(session=session):
+ --> 433             return f(*args, **kwds)
+     434 
+     435     return wrapper
+
+ ~/miniconda3/envs/py38/lib/python3.8/site-packages/rasterio/__init__.py in open(fp, mode, driver, width, height, count, crs, transform, dtype, nodata, sharing, **kwargs)
+     156     if not isinstance(fp, string_types):
+     157         if not (hasattr(fp, 'read') or hasattr(fp, 'write') or isinstance(fp, Path)):
+ --> 158             raise TypeError("invalid path or file: {0!r}".format(fp))
+     159     if mode and not isinstance(mode, string_types):
+     160         raise TypeError("invalid mode: {0!r}".format(mode))
+
+ TypeError: invalid path or file: <xarray.DataArray 'T2M' (time: 12, y: 2881, x: 1681)>
+ [58115532 values with dtype=float32]
+ Coordinates:
+   * time     (time) float32 0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0
+   * x        (x) float32 -720000.0 -719000.0 -718000.0 ... 959000.0 960000.0
+   * y        (y) float32 -3450000.0 -3449000.0 ... -571000.0 -570000.0
+ Attributes:
+     units:          degC
+     long_name:      Near surface temperature
+     standard_name:  Near_surface_temperature
+ :end:
+
+
+#+BEGIN_SRC ipython
+xr.open_rasterio(mar)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [34]: 
+# output
+---------------------------------------------------------------------------
+ValueError                                Traceback (most recent call last)
+/tmp/ipykernel_24774/2519322675.py in <module>
+----> 1 xr.open_rasterio(mar)
+
+~/miniconda3/envs/py38/lib/python3.8/site-packages/xarray/backends/rasterio_.py in open_rasterio(filename, parse_coordinates, chunks, cache, lock)
+    251         If chunks is provided, this argument is passed on to
+    252         :py:func:`dask.array.from_array`. By default, a global lock is
+--> 253         used to avoid issues with concurrent access to the same file when using
+    254         dask's multithreaded backend.
+    255 
+
+ValueError: Unknown dims
+:end:
+
+*** Udtræk data fra historisk MAR
+
+
+**** Get to know MAR historic
+ 
+#+BEGIN_SRC ipython
+<<load_libraries>>
+datapath = 'data/'
+with xr.load_dataset(datapath + 'MARv3.5.2-20km-monthly-20CRv2c-2014.nc', decode_times=False) as ds:
+    print(ds)
+    ds.TT[6,:,:].plot()
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [49]: 
+# output
+<xarray.Dataset>
+Dimensions:    (time: 12, x: 301, y: 561)
+Coordinates:
+  * time       (time) float32 0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0
+  * x          (x) float32 5.0 10.0 15.0 20.0 ... 1490.0 1495.0 1500.0 1505.0
+  * y          (y) float32 5.0 10.0 15.0 20.0 ... 2790.0 2795.0 2800.0 2805.0
+Data variables:
+    LON        (y, x) float32 -52.24052 -52.16066 ... 10.19565 10.39871
+    LAT        (y, x) float32 58.62927 58.63904 58.64875 ... 81.56419 81.52948
+    MSK_bam01  (y, x) float32 0.0 0.0 0.0 0.0 0.0 0.0 ... 0.0 0.0 0.0 0.0 0.0
+    SRF_bam01  (y, x) float32 -0.1 -0.1 -0.1 -0.1 -0.1 ... -0.1 -0.1 -0.1 -0.1
+    AREA       (y, x) float32 0.0 0.0 0.0 0.0 0.0 0.0 ... 0.0 0.0 0.0 0.0 0.0
+    MSK_bam13  (y, x) float32 0.0 0.0 0.0 0.0 0.0 0.0 ... 0.0 0.0 0.0 0.0 0.0
+    SRF_bam13  (y, x) float32 0.0 0.0 0.0 0.0 0.0 0.0 ... 0.0 0.0 0.0 0.0 0.0
+    MSK_MAR    (y, x) float32 nan nan nan nan nan nan ... nan nan nan nan nan
+    SRF_MAR    (y, x) float32 nan nan nan nan nan nan ... nan nan nan nan nan
+    SMB        (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    RU         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    ME         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    ST         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    TT         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    SMB2       (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    RU2        (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    SF         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    RF         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    SU         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    AL         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    AL2        (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    ST2        (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    SWD        (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    LWD        (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    SHF        (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    LHF        (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    SP         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    UU         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    VV         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    QQ         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    CC         (time, y, x) float32 nan nan nan nan nan ... nan nan nan nan nan
+    SMBcorr    (time, y, x) float32 52.448383 52.448383 ... 19.769724 19.769724
+    RUcorr     (time, y, x) float32 0.0 0.0 0.0 0.0 0.0 ... 0.0 0.0 0.0 0.0 0.0
+    MEcorr     (time, y, x) float32 0.0 0.0 0.0 0.0 0.0 ... 0.0 0.0 0.0 0.0 0.0
+    STcorr     (time, y, x) float32 -7.966826 -7.966826 ... -18.73075 -18.73075
+    TTcorr     (time, y, x) float32 -5.8944764 -5.8944764 ... -17.515055
+Attributes:
+    title:          Monthly MARv3.5.2 outputs in 2014 interpolated on the 5x5...
+    institution:    University of Liège
+    grid:           Map Projection:Polar Stereographic Ellipsoid - Map Refere...
+    history:        libUN (2013.05.22) - Fri Apr 15 14:10:05 2016
+    netcdf:         4.3.3.1 $
+    institute:      University of Liège (Belgium)
+    contact:        xavierfettweis@ulg.ac.be
+    model:          regional climate model MARv3.5.2
+    forcing:        20CRv2c
+    creation_date:  2016-04-15-T141212Z
+    frequency:      mon
+
+# text/plain
+: <Figure size 432x288 with 2 Axes>
+
+# image/png
+[[file:obipy-resources/68d950e702deb563c067af145c1a8d6ea5c9eb17/7c6d1bfad7852df9db1005737806b3eed5df1088.png]]
+:end:
+
+
+
+Koordinaterne er i km
+
+
+**** Creating working netcdf files from the MAR files 
+Der er et problem med koordinatsystemet. Derfor tager jeg data og laver nye xarray filer.
+
+***** Workflow
+ Creating xarray and nc mar dataset files:
+ #+BEGIN_SRC ipython
+ reanalysis = '20CRv2c'
+ reanalysis_folder = 'ERA_20CRv2c_1900_2014'
+ working_folder = "/home/shl/OneDrive/projects/northgreenland/data/"+reanalysis+'/'
+ datapath = '/media/shl/Elements1/data/mar_hist/'+reanalysis_folder+'/MARv3.5.2-20km-monthly-'
+ #datapath = "/home/shl/OneDrive/projects/northgreenland/data/MARv3.5.2-20km-monthly-"
+
+ <<load_libraries>>
+ <<get_correct_projection_info_for_mar>>
+ for year in range(1900,2015): #range(1871,2012+1):
+     <<Get_mar_data_for_year>>
+     <<Create_xarray_and_nc_mar_dataset_for_year>>
+ #+END_SRC
+
+ #+RESULTS:
+ :results:
+ # Out [65]: 
+ # output
+ CF-1.3
+
+ :end:
+
+***** Code
+  Then get correct projection info from another better constructed file
+ #+NAME: get_correct_projection_info_for_mar
+ #+BEGIN_SRC ipython
+ with xr.open_dataset('/home/shl/programs/pism-stable/examples/jako/Greenland_5km_v1.1.nc',decode_times=False) as ds:
+     mapping = ds.mapping
+     y1 = ds.y1
+     x1 = ds.x1
+     lat = ds.lat
+     lon = ds.lon
+     conventions = ds.attrs['Conventions']
+
+ print(conventions)
+  #+END_SRC
+
+  #+RESULTS: get_correct_projection_info_for_mar
+  :results:
+  # Out [59]: 
+  # output
+  CF-1.3
+
+  :end:
+
+  #+NAME: Get_mar_data_for_year
+  #+BEGIN_SRC ipython
+ with xr.open_dataset(datapath+reanalysis+'-'+str(year)+'.nc',decode_times=False) as ds:
+     #ST = ds.STcorr.mean(dim='time')
+     time = ds.time
+     SMB = ds.SMB
+     SF = ds.SF
+     RF = ds.RF
+     ME = ds.MEcorr
+     RU = ds.RU2
+     TT = ds.TT
+     LAT = ds.LAT
+     LON = ds.LON
+
+     SF = SF.where(SF.values<1e36)
+     RU = RU.where(RU.values<1e36)
+     RU = RU.interpolate_na(dim='x',method='linear')
+
+  #+END_SRC
+
+ #+RESULTS: Get_mar_data_for_year
+ :results:
+ # Out [53]: 
+ :end:
+
+
+ #+NAME: Create_xarray_and_nc_mar_dataset_for_year
+  #+BEGIN_SRC ipython
+ mar_ds = xr.Dataset(
+     {
+         "snow_fall":(["time","y1","x1"],SF.values),
+         "rain_fall":(["time","y1","x1"],RF.values),
+         "smb":(["time","y1","x1"],SMB.values),
+         "melt":(["time","y1","x1"],ME.values),
+         "runoff":(["time","y1","x1"],RU.values),
+	 "air_temp":(["time","y1","x1"],TT.values),
+         "mapping":mapping,
+     },
+     coords={
+         "time": time,
+         "lat": (["y1","x1"],LAT.values), #lat.squeeze('time'),
+         "lon": (["y1","x1"],LON.values), #lon.squeeze('time'),#
+         "x1":x1,
+         "y1":y1,
+     },
+
+ )
+
+ mar_ds['runoff'].attrs['units'] = 'mmWE/year'
+ mar_ds['runoff'].attrs['long_name'] = "runoff)"
+ mar_ds['runoff'].attrs['standard_name'] = "runoff"
+                
+
+ mar_ds['lat'].attrs['units'] = "degreesN"
+ mar_ds['lon'].attrs['units'] = "degreesE"
+
+ mar_ds.attrs['Conventions'] = conventions
+
+ mar_ds.attrs['Reference'] = 'MAR historical ERA20C, downsampled to 5km. Fettweis, X., Box, J. E., Agosta, C., Amory, C., Kittel, C., Lang, C., van As, D., Machguth, H., and Gallée, H.: Reconstructions of the 1900–2015 Greenland ice sheet surface mass balance using the regional climate MAR model, The Cryosphere, 11, 1015–1033, https://doi.org/10.5194/tc-11-1015-2017, 2017.'
+
+ mar_ds.to_netcdf(working_folder+'/mar_'+reanalysis+'_Greenland5km_'+str(year)+'.nc')
+  #+END_SRC
+
+  #+RESULTS: Create_xarray_and_nc_mar_dataset_for_year
+  :results:
+  # Out [56]: 
+  :end:
+
+
+
+
+
+
+
+
+
+
+
+**** Extract monthly values for each year
+
+
+***** Air temperature
+ #+BEGIN_SRC jupyter-python :tangle extract_MARv3.5.py
+<<load_libraries>>
+
+gdf = gpd.read_file('shp/larocca/polygon_larocca_bamberprj.shp' )
+reanalysis = '20CRv2c'
+
+unique_name_column = 'new_ID'
+name = []
+for idx,key in enumerate(gdf[unique_name_column]):
+    name.append(str(gdf.iloc[idx][unique_name_column]))
+
+datapath = '/home/shl/data/MAR/larocca_extract/'+reanalysis + '/'
+filename = 'mar_'+reanalysis+'_Greenland5km_'
+
+
+## AIR TEMP ###########################################
+variable = 'air_temp'
+<<extract_MARv3.5_variable>>
+
+## SMB ################################################
+variable = 'SMB'
+<<extract_MARv3.5_variable>>
+
+## RAIN ###############################################
+variable = 'rain_fall'
+<<extract_MARv3.5_variable>>
+
+## SNOW ###############################################
+variable = 'snow_fall'
+<<extract_MARv3.5_variable>>
+
+## SNOW ###############################################
+variable = 'runoff'
+<<extract_MARv3.5_variable>>
+
+
+
+#+END_SRC
+
+
+"snow_fall":(["time","y1","x1"],SF.values),
+         "rain_fall":(["time","y1","x1"],RF.values),
+         "smb":(["time","y1","x1"],SMB.values),
+         "melt":(["time","y1","x1"],ME.values),
+         "runoff":(["time","y1","x1"],RU.values),
+	 "air_temp":(["time","y1","x1"],TT.values),
+
+
+
+#+NAME: extract_MARv3.5_variable
+#+BEGIN_SRC jupyter-python 
+monthly_zone_stat = pd.DataFrame({})
+for year in range(1900,2015):
+    mar = datapath + filename +str(year)+'.nc'
+    for month in range(12):
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+	                         raster='netcdf:'+mar+':'+variable,
+				 stats='mean',
+				 band=month+1,
+				 all_touched = True)
+          #print(zone_stat)
+        stats = pd.DataFrame(zone_stat)
+        monthly_zone_stat[str(year)+'-'+str(month+1)] = stats['mean']
+    print('year = '+ str(year))
+
+results = monthly_zone_stat.T
+results.index = pd.to_datetime(results.index, format = '%Y-%m')
+results.columns = name
+#print(results)
+results.to_csv('csvs/MAR_v3.5.2_20CRv2c_'+variable+'_monthly_mean.csv')
+results_annual = results.resample('Y').mean()
+#print(results_annual)
+results_annual.to_csv('csvs/MAR_v3.5.2_20CRv2c_'+variable+'_annual_mean.csv')
+results_annual = results.resample('Y').sum()
+#print(results_annual)
+results_annual.to_csv('csvs/MAR_v3.5.2_20CRv2c_'+variable+'_annual_sum.csv')
+ #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [2]: 
+  # output
+		    134        137        138        133        135        136  \
+  1900-01-01 -18.673750 -18.807082 -18.807082 -18.644174 -18.644174 -18.644174   
+  1900-02-01 -10.560839 -10.479187 -10.479187 -10.448478 -10.448478 -10.448478   
+  1900-03-01 -10.869417 -10.776876 -10.776876 -10.744958 -10.744958 -10.744958   
+  1900-04-01 -10.561973 -10.522865 -10.522865 -10.497673 -10.497673 -10.497673   
+  1900-05-01  -1.751353  -1.615742  -1.615742  -1.655959  -1.655959  -1.655959   
+  1900-06-01   1.825368   3.134126   3.134126   2.137048   2.137048   2.137048   
+  1900-07-01   3.163366   4.763149   4.763149   3.606491   3.606491   3.606491   
+  1900-08-01   1.271692   1.799105   1.799105   1.389347   1.389347   1.389347   
+  1900-09-01  -2.446158  -2.431604  -2.431604  -2.449924  -2.449924  -2.449924   
+  1900-10-01  -5.756392  -6.252814  -6.252814  -5.817691  -5.817691  -5.817691   
+  1900-11-01  -8.772423  -9.210450  -9.210450  -8.786580  -8.786580  -8.786580   
+  1900-12-01 -18.091185 -18.392934 -18.392934 -18.035542 -18.035542 -18.035542   
+  1901-01-01 -17.475620 -17.722305 -17.722305 -17.462537 -17.462537 -17.462537   
+  1901-02-01  -8.333621  -7.997663  -7.997663  -8.159895  -8.159895  -8.159895   
+  1901-03-01 -14.641343 -14.680440 -14.680440 -14.571135 -14.571135 -14.571135   
+  1901-04-01 -12.609808 -12.810398 -12.810398 -12.601458 -12.601458 -12.601458   
+  1901-05-01  -2.781523  -2.688851  -2.688851  -2.703196  -2.703196  -2.703196   
+  1901-06-01  -1.306150  -0.722737  -0.722737  -1.152065  -1.152065  -1.152065   
+  1901-07-01   1.506823   2.676147   2.676147   1.881376   1.881376   1.881376   
+  1901-08-01   1.768566   2.360048   2.360048   1.911939   1.911939   1.911939   
+  1901-09-01  -0.636260  -0.340270  -0.340270  -0.517396  -0.517396  -0.517396   
+  1901-10-01  -4.832852  -5.222891  -5.222891  -4.875479  -4.875479  -4.875479   
+  1901-11-01  -8.157728  -8.657537  -8.657537  -8.213383  -8.213383  -8.213383   
+  1901-12-01 -15.209270 -15.607989 -15.607989 -15.222137 -15.222137 -15.222137   
+
+		    139        140        142        126  ...        359  \
+  1900-01-01 -19.151514 -19.151514 -18.971218 -21.442667  ... -16.640652   
+  1900-02-01 -10.071671 -10.071671 -10.118222 -11.653226  ... -20.560707   
+  1900-03-01 -10.045224 -10.045224 -10.163561 -11.700514  ... -19.688538   
+  1900-04-01  -9.987598  -9.987598 -10.090178 -11.616385  ... -15.855867   
+  1900-05-01  -0.798292  -0.798292  -1.056371  -1.986326  ...  -7.598248   
+  1900-06-01   5.627099   5.627099   4.895713   2.988944  ...   2.345283   
+  1900-07-01   8.055380   8.055380   7.279358   7.210911  ...   5.877549   
+  1900-08-01   2.810252   2.810252   2.440613   1.330201  ...   1.190785   
+  1900-09-01  -2.769162  -2.769162  -2.747246  -4.851419  ...  -6.266561   
+  1900-10-01  -7.164988  -7.164988  -6.916012  -9.319805  ... -16.967739   
+  1900-11-01  -9.918529  -9.918529  -9.660936 -12.051462  ... -18.870405   
+  1900-12-01 -18.378275 -18.378275 -18.190353 -20.742764  ... -23.308048   
+  1901-01-01 -17.988539 -17.988539 -17.824650 -20.142736  ... -20.499844   
+  1901-02-01  -6.866317  -6.866317  -7.075179  -8.288115  ... -23.868151   
+  1901-03-01 -14.266537 -14.266537 -14.300058 -16.105881  ... -19.808403   
+  1901-04-01 -12.941682 -12.941682 -12.879780 -14.841681  ... -13.199749   
+  1901-05-01  -2.082616  -2.082616  -2.263777  -3.428473  ...  -5.747019   
+  1901-06-01   1.200900   1.200900   0.481016  -1.192419  ...   0.278305   
+  1901-07-01   5.502793   5.502793   4.833976   4.551819  ...   4.133937   
+  1901-08-01   3.548398   3.548398   3.148157   2.188713  ...   2.255232   
+  1901-09-01   0.564495   0.564495   0.299784  -0.958853  ...  -2.226743   
+  1901-10-01  -6.217196  -6.217196  -5.941068  -8.346800  ... -15.229599   
+  1901-11-01  -9.278236  -9.278236  -9.110969 -11.408545  ... -23.250019   
+  1901-12-01 -16.160400 -16.160400 -15.969797 -18.404152  ... -17.578213   
+
+		    425        357        355        405        352        291  \
+  1900-01-01 -16.640652 -17.000542 -16.961464 -16.897869 -16.904497 -16.608902   
+  1900-02-01 -20.560707 -20.691902 -20.795017 -18.902988 -19.238733 -18.840323   
+  1900-03-01 -19.688538 -19.981153 -20.000040 -17.837322 -18.149601 -17.955806   
+  1900-04-01 -15.855867 -16.214756 -16.180725 -14.987450 -15.230768 -14.907568   
+  1900-05-01  -7.598248  -8.049855  -7.966745  -7.202509  -7.664918  -6.897391   
+  1900-06-01   2.345283   3.171397   2.480589   2.334853   2.624423   2.982504   
+  1900-07-01   5.877549   6.220579   5.862029   4.760100   4.528175   5.651229   
+  1900-08-01   1.190785   0.989125   0.949532  -0.470186  -0.645565   0.428800   
+  1900-09-01  -6.266561  -6.793837  -6.655213  -8.252370  -8.091892  -7.572921   
+  1900-10-01 -16.967739 -17.216616 -17.280809 -15.698769 -15.424372 -15.585410   
+  1900-11-01 -18.870405 -19.252592 -19.221695 -18.293913 -17.892162 -18.151596   
+  1900-12-01 -23.308048 -23.986513 -23.782265 -22.248222 -21.877095 -22.420215   
+  1901-01-01 -20.499844 -20.948713 -20.873466 -19.224230 -19.217590 -19.297098   
+  1901-02-01 -23.868151 -24.263464 -24.222773 -20.374359 -20.813823 -20.911990   
+  1901-03-01 -19.808403 -20.109186 -20.118612 -18.187912 -18.418843 -18.267679   
+  1901-04-01 -13.199749 -13.626803 -13.550524 -13.779598 -14.074001 -13.317197   
+  1901-05-01  -5.747019  -6.111309  -6.073175  -5.646660  -6.089857  -5.335924   
+  1901-06-01   0.278305   0.622074   0.230724  -0.316277   0.144440   0.151441   
+  1901-07-01   4.133937   4.796905   4.214207   4.004029   3.884943   4.800769   
+  1901-08-01   2.255232   2.300261   2.108242   1.447909   1.183677   2.234915   
+  1901-09-01  -2.226743  -2.369606  -2.462227  -2.130239  -2.432914  -1.659432   
+  1901-10-01 -15.229599 -15.518618 -15.549488 -14.443189 -14.336498 -14.190273   
+  1901-11-01 -23.250019 -23.563730 -23.576237 -20.515131 -20.908243 -20.582339   
+  1901-12-01 -17.578213 -18.142920 -17.974016 -17.894524 -17.603099 -17.847784   
+
+		    309        290        404  
+  1900-01-01 -18.933146 -16.843689 -17.579126  
+  1900-02-01 -21.022821 -19.296873 -19.697590  
+  1900-03-01 -17.588717 -18.547054 -18.796036  
+  1900-04-01 -16.983810 -15.407301 -15.792876  
+  1900-05-01  -8.765333  -7.326373  -7.794918  
+  1900-06-01   0.244508   3.127796   2.471965  
+  1900-07-01   0.829793   5.723382   4.796830  
+  1900-08-01  -4.031582   0.414566  -0.712702  
+  1900-09-01 -11.316741  -7.586079  -8.553042  
+  1900-10-01 -17.320065 -15.873039 -16.811251  
+  1900-11-01 -19.686841 -18.371712 -19.276300  
+  1900-12-01 -24.183011 -22.908504 -23.620352  
+  1901-01-01 -20.982295 -19.822693 -20.316935  
+  1901-02-01 -18.919975 -21.938965 -21.848877  
+  1901-03-01 -18.581991 -18.868456 -19.185078  
+  1901-04-01 -16.390326 -13.557768 -14.129536  
+  1901-05-01  -6.821417  -5.698336  -6.182442  
+  1901-06-01  -1.926009   0.270219  -0.429926  
+  1901-07-01   0.613523   4.872256   4.332721  
+  1901-08-01  -2.689271   2.179365   1.143899  
+  1901-09-01  -5.709716  -1.896372  -2.612285  
+  1901-10-01 -16.411544 -14.378143 -15.474704  
+  1901-11-01 -20.203292 -21.249775 -21.530272  
+  1901-12-01 -20.358612 -18.094662 -18.801798  
+
+  [24 rows x 1014 columns]
+		   134       137       138       133       135       136  \
+  1900-12-31 -6.768589 -6.566098 -6.566098 -6.662341 -6.662341 -6.662341   
+  1901-12-31 -6.892399 -6.784574 -6.784574 -6.807114 -6.807114 -6.807114   
+
+		   139       140       142       126  ...        359        425  \
+  1900-12-31 -5.982710 -5.982710 -6.108201 -7.819543  ... -11.361929 -11.361929   
+  1901-12-31 -6.248745 -6.248745 -6.383529 -8.031427  ... -11.228355 -11.228355   
+
+		    357        355        405        352        291        309  \
+  1900-12-31 -11.567222 -11.629319 -11.141387 -11.163917 -10.823133 -13.229814   
+  1901-12-31 -11.411259 -11.487279 -10.588348 -10.723484 -10.351883 -12.365077   
+
+		    290        404  
+  1900-12-31 -11.074573 -11.780450  
+  1901-12-31 -10.681944 -11.252936  
+
+  [2 rows x 1014 columns]
+
+  :end:
+
+
+  :end:
+
+  #+BEGIN_SRC ipython
+  #print(len(gdf['geometry']))
+  #print(pd.DataFrame(zone_stat))
+  print(np.empty([12,len(gdf['geometry'])]).shape)
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [36]: 
+  # output
+  (12, 1014)
+
+  :end:
+
+  #+BEGIN_SRC ipython
+    
+      stats = []
+      for id in range(len(zone_stat)):
+          stats.append(zone_stat[id]['sum'])
+
+
+      rain[str(year)] = stats
+
+      variable = 'SF'
+
+      mar_annual = 'data/MARv3.11-annual_Sf_ERA5_'+str(year)+'.nc'
+      zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+				 raster='netcdf:'+mar_annual+':'+variable,
+				 stats='sum',
+				 band = 1, all_touched = True)
+      stats = []
+    
+      for id in range(len(zone_stat)):
+          stats.append(zone_stat[id]['sum'])
+    
+      snow[str(year)] = stats
+    
+  snow.set_index('name', inplace =True)   
+  rain.set_index('name', inplace =True)
+
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [6]: 
+  :end:
+
+  #+BEGIN_SRC ipython
+  mar_annual = 'data/MARv3.11-annual_RF_ERA5_'+str(year)+'.nc'
+    
+  zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                             raster='netcdf:'+mar_annual+':RF',
+                             stats='sum',
+                             band = 1, all_touched = True)
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [7]: 
+  :end:
+
+  #+BEGIN_SRC ipython
+
+  #unit is in mmWe/year
+  #So we need to multiply by area to get it into m3
+
+  rain_out = rain.T * 1000*1000*10**(-9)
+  rain_out.index.name = 'year'
+  #print(rain_out)
+  rain_out.to_csv('results/rain_1979_2019_Gt_pr_year.csv', index=True)
+
+  snow_out = snow.T * 1000*1000*10**(-9)
+  snow_out.index.name = 'year'
+  #print(snow_out)
+
+  snow_out.to_csv('results/snow_1979_2019_Gt_pr_year.csv', index = True)
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [25]: 
+  :end:
+
+
+  #+BEGIN_SRC ipython
+  ax =rain_out.iloc[:,0].plot()
+  snow_out.iloc[:,0].plot(ax=ax)
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [26]: 
+
+
+  # text/plain
+  : <Figure size 432x288 with 1 Axes>
+
+  # image/png
+  [[file:obipy-resources/5b43cd7e41b4fee74801f95966e130b6f8e8bc5a/d6ff86562e63d8298f85f45b7b361a88c4b92348.png]]
+  :end:
+
+
+  #+BEGIN_SRC ipython
+  mean1 = rain_out.loc['1978':'2002'].mean(axis = 0)
+  sum1  = rain_out.loc['1978':'2002'].sum(axis = 0)
+  mean2 = rain_out.loc['2003':'2008'].mean(axis = 0)
+  sum2  = rain_out.loc['2003':'2008'].sum(axis = 0)
+  mean3 = rain_out.loc['2009':'2017'].mean(axis = 0)
+  sum3  = rain_out.loc['2009':'2017'].sum(axis = 0)
+
+
+  stats = pd.DataFrame({'mean 1978 - 2002': mean1, 'mean 2003 - 2008': mean2, 'mean 2009 - 2017': mean3, 'sum 1978 - 2002': sum1, 'sum 2003 - 2008': sum2, 'sum 2009 - 2017': sum3})
+
+  stats.T.to_csv('results/rain_stats_1979_2019.csv', index = True)
+
+
+  mean1 = snow_out.loc['1978':'2002'].mean(axis = 0)
+  sum1  = snow_out.loc['1978':'2002'].sum(axis = 0)
+  mean2 = snow_out.loc['2003':'2008'].mean(axis = 0)
+  sum2  = snow_out.loc['2003':'2008'].sum(axis = 0)
+  mean3 = snow_out.loc['2009':'2017'].mean(axis = 0)
+  sum3  = snow_out.loc['2009':'2017'].sum(axis = 0)
+
+
+  stats = pd.DataFrame({'mean 1978 - 2002': mean1, 'mean 2003 - 2008': mean2, 'mean 2009 - 2017': mean3, 'sum 1978 - 2002': sum1, 'sum 2003 - 2008': sum2, 'sum 2009 - 2017': sum3})
+
+  stats.T.to_csv('results/snow_stats_1979_2019.csv', index = True)
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [27]: 
+  :end:
+
+
+  #+BEGIN_SRC ipython
+
+  #unit is in mmWe/year
+  #So we need to multiply by area to get it into m3
+
+  precip_out = rain_out+snow_out
+  precip_out.index.name = 'year'
+  #print(rain_out)
+  precip_out.to_csv('results/precipitation_1979_2019_Gt_pr_year.csv', index=True)
+
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [28]: 
+  :end:
+
+
+  #+BEGIN_SRC ipython
+  mean1 = precip_out.loc['1978':'2002'].mean(axis = 0)
+  sum1  = precip_out.loc['1978':'2002'].sum(axis = 0)
+  mean2 = precip_out.loc['2003':'2008'].mean(axis = 0)
+  sum2  = precip_out.loc['2003':'2008'].sum(axis = 0)
+  mean3 = precip_out.loc['2009':'2017'].mean(axis = 0)
+  sum3  = precip_out.loc['2009':'2017'].sum(axis = 0)
+
+
+  stats = pd.DataFrame({'mean 1978 - 2002': mean1, 'mean 2003 - 2008': mean2, 'mean 2009 - 2017': mean3, 'sum 1978 - 2002': sum1, 'sum 2003 - 2008': sum2, 'sum 2009 - 2017': sum3})
+
+  stats.T.to_csv('results/precip_stats_1979_2019.csv', index = True)
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [29]: 
+  :end:
+
+  #+BEGIN_SRC ipython
+  ax =rain_out.iloc[:,0].plot()
+  snow_out.iloc[:,0].plot(ax=ax)
+  precip_out.iloc[:,0].plot(ax=ax)
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [30]: 
+
+
+  # text/plain
+  : <Figure size 432x288 with 1 Axes>
+
+  # image/png
+  [[file:obipy-resources/5b43cd7e41b4fee74801f95966e130b6f8e8bc5a/6a99875935f144f944d9e84714b44c4a4920f547.png]]
+  :end:
+
+
+
+*** Sammenlign data for de to forskellige modeller.
