@@ -60,30 +60,27 @@ import rasterstats as rs
 # Out [1]: 
 :end:
 
-Making annual sums of the MAR data - this makes everything very much faster
-#+BEGIN_SRC ipython
-for year in range(1979,2020):
-    marpath = '/media/shl/Elements1/data/MARv3.11/monthly_era5_1km/MARv3.11-monthly-ERA5-'+str(year)+'.nc'
-    with xr.open_dataset(marpath,decode_times=False) as DS:
+
+
+**** Making annual means of the MAR data - this makes everything very much faster
+#+BEGIN_SRC ipython :tangle make_annual_sum_files.py
+<<load_libraries>>
+marpath = '/media/shl/Elements1/data/MARv3.12/monthly_1km/'
+for year in range(1950,2022):
+    
+    src_name = 'MARv3.12-monthly-ERA5-'+str(year)+'.nc'
+    with xr.open_dataset(marpath+src_name,decode_times=False) as DS:
         annual = DS['RF'].sum(dim = 'time')
-    
-        annual.to_netcdf('data/MARv3.11-annual_RF_ERA5_'+str(year)+'.nc')
-
-#+END_SRC
-
-#+RESULTS:
-:results:
-# Out [2]: 
-:end:
-
-#+BEGIN_SRC ipython
-for year in range(1979,2020):
-    marpath = '/media/shl/Elements1/data/MARv3.11/monthly_era5_1km/MARv3.11-monthly-ERA5-'+str(year)+'.nc'
-    with xr.open_dataset(marpath,decode_times=False) as DS:
+        annual.to_netcdf(marpath+'/annual/MARv3.12-annual_sum_RF_ERA5_'+str(year)+'.nc')
         annual = DS['SF'].sum(dim = 'time')
-    
-        annual.to_netcdf('data/MARv3.11-annual_Sf_ERA5_'+str(year)+'.nc')
-
+        annual.to_netcdf(marpath+'/annual/MARv3.12-annual_sum_SF_ERA5_'+str(year)+'.nc')
+        annual = DS['T2Mcorr'].mean(dim = 'time')
+        annual.to_netcdf(marpath+'/annual/MARv3.12-annual_mean_T2Mcorr_ERA5_'+str(year)+'.nc')
+        annual = DS['RUcorr'].sum(dim = 'time')
+        annual.to_netcdf(marpath+'/annual/MARv3.12-annual_sum_RUcorr_ERA5_'+str(year)+'.nc')
+        annual = DS['SMBcorr'].sum(dim = 'time')
+        annual.to_netcdf(marpath+'/annual/MARv3.12-annual_sum_SMBcorr_ERA5_'+str(year)+'.nc')
+	
 #+END_SRC
 
 #+RESULTS:
@@ -91,64 +88,145 @@ for year in range(1979,2020):
 # Out [3]: 
 :end:
 
-
-
 **** Then extract the annual sum for each year and all the polygons
 
-#+BEGIN_SRC ipython
-gdf = gpd.read_file('RGI6_gperi_delin_vOct14_SpJoin7.shp' )
+#+BEGIN_SRC ipython :tangle extract_annual_mean.py
+<<load_libraries>>
+
+marpath = '/media/shl/Elements1/data/MARv3.12/monthly_1km/'
+
+gdf = gpd.read_file('shp/larocca/polygon_larocca_epsg3413.shp')
 
 melt = []
 years = []
-year = 2000
+#year = 2000
 
-unique_name_column = 'New_RGIid2'
+unique_name_column = 'new_ID'
 name = []
 for id in range(len(gdf[unique_name_column])):
     name.append(gdf.iloc[id][unique_name_column])
     
-snow = pd.DataFrame({'name':name})
-rain = pd.DataFrame({'name':name})
+snow = pd.DataFrame({'new_ID':name})
+rain = pd.DataFrame({'new_ID':name})
+temp = pd.DataFrame({'new_ID':name})
+smb = pd.DataFrame({'new_ID':name})
+runoff = pd.DataFrame({'new_ID':name})
 
-for year in range(1979,2020):
-    mar_annual = 'data/MARv3.11-annual_RF_ERA5_'+str(year)+'.nc'
-    
+for year in range(1950,2022):
+    print('processing year: '+ str(year))
+    mar_annual = marpath+'/annual/MARv3.12-annual_sum_RF_ERA5_'+str(year)+'.nc'
+    variable = 'RF'
     zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
-                               raster='netcdf:'+mar_annual+':RF',
-                               stats='sum',
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
                                band = 1, all_touched = True)
 
 
     
     stats = []
     for id in range(len(zone_stat)):
-        stats.append(zone_stat[id]['sum'])
+        stats.append(zone_stat[id]['mean'])
 
 
     rain[str(year)] = stats
 
     variable = 'SF'
 
-    mar_annual = 'data/MARv3.11-annual_Sf_ERA5_'+str(year)+'.nc'
+    mar_annual = marpath+'/annual/MARv3.12-annual_sum_SF_ERA5_'+str(year)+'.nc'
     zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
                                raster='netcdf:'+mar_annual+':'+variable,
-                               stats='sum',
+                               stats='mean',
                                band = 1, all_touched = True)
     stats = []
     
     for id in range(len(zone_stat)):
-        stats.append(zone_stat[id]['sum'])
+        stats.append(zone_stat[id]['mean'])
     
     snow[str(year)] = stats
-    
-snow.set_index('name', inplace =True)   
-rain.set_index('name', inplace =True)
 
+    variable = 'T2Mcorr'
+
+    mar_annual = marpath+'/annual/MARv3.12-annual_mean_T2Mcorr_ERA5_'+str(year)+'.nc'
+    zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+    stats = []
+    
+    for id in range(len(zone_stat)):
+        stats.append(zone_stat[id]['mean'])
+    
+    temp[str(year)] = stats
+
+    variable = 'SMBcorr'
+
+    mar_annual = marpath+'/annual/MARv3.12-annual_sum_SMBcorr_ERA5_'+str(year)+'.nc'
+    zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+    stats = []
+    
+    for id in range(len(zone_stat)):
+        stats.append(zone_stat[id]['mean'])
+    
+    smb[str(year)] = stats
+
+    variable = 'RUcorr'
+
+    mar_annual = marpath+'/annual/MARv3.12-annual_sum_RUcorr_ERA5_'+str(year)+'.nc'
+    zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+    stats = []
+    
+    for id in range(len(zone_stat)):
+        stats.append(zone_stat[id]['mean'])
+    
+    runoff[str(year)] = stats
+    
+snow.set_index('new_ID', inplace =True)   
+rain.set_index('new_ID', inplace =True)
+temp.set_index('new_ID', inplace =True)
+smb.set_index('new_ID', inplace =True)
+runoff.set_index('new_ID', inplace =True)
+
+temp_out = temp.T
+temp_out.index.name = 'year'
+temp.to_csv('results_larocca/MARv3.12_T2Mcorr_1950_2021_catchment_mean_of_annual_mean.csv', index = True)
+
+snow_out = snow.T
+snow_out.index.name = 'year'
+snow.to_csv('results_larocca/MARv3.12_SF_1950_2021_catchment_mean_of_annual_sum.csv', index = True)
+
+rain_out = rain.T
+rain_out.index.name = 'year'
+rain.to_csv('results_larocca/MARv3.12_RF_1950_2021_catchment_mean_of_annual_sum.csv', index = True)
+
+smb_out = smb.T
+smb_out.index.name = 'year'
+smb.to_csv('results_larocca/MARv3.12_SMBcorr_1950_2021_catchment_mean_of_annual_sum.csv', index = True)
+
+runoff_out = runoff.T
+runoff_out.index.name = 'year'
+runoff.to_csv('results_larocca/MARv3.12_RUcorr_1950_2021_catchment_mean_of_annual_sum.csv', index = True)
 #+END_SRC
 
 #+RESULTS:
 :results:
-# Out [6]: 
+# Out [7]: 
+# output
+---------------------------------------------------------------------------
+KeyError                                  Traceback (most recent call last)
+/tmp/ipykernel_5242/1004389195.py in <module>
+     56 
+     57     for id in range(len(zone_stat)):
+---> 58         stats.append(zone_stat[id]['sum'])
+     59 
+     60     snow[str(year)] = stats
+
+KeyError: 'sum'
 :end:
 
 #+BEGIN_SRC ipython
@@ -297,7 +375,321 @@ precip_out.iloc[:,0].plot(ax=ax)
 
 
 
-** Extracting data for Laura Larocca
+
+
+**** Make one variable nc files to try to save time (not space)
+#+BEGIN_SRC ipython :tangle make_annual_sum_files.py
+<<load_libraries>>
+marpath = '/media/shl/Elements1/data/MARv3.12/monthly_1km/'
+for year in range(1950,2022):
+    
+    src_name = 'MARv3.12-monthly-ERA5-'+str(year)+'.nc'
+    with xr.open_dataset(marpath+src_name,decode_times=False) as DS:
+        annual = DS['RF']
+        annual.to_netcdf(marpath+'/monthly_one_variable/MARv3.12-RF_ERA5_'+str(year)+'.nc')
+        annual = DS['SF']
+        annual.to_netcdf(marpath+'/monthly_one_variable/MARv3.12-SF_ERA5_'+str(year)+'.nc')
+        annual = DS['T2Mcorr']
+        annual.to_netcdf(marpath+'/monthly_one_variable/MARv3.12-T2Mcorr_ERA5_'+str(year)+'.nc')
+        annual = DS['RUcorr']
+        annual.to_netcdf(marpath+'/monthly_one_variable/MARv3.12-RUcorr_ERA5_'+str(year)+'.nc')
+        annual = DS['SMBcorr']
+        annual.to_netcdf(marpath+'/monthly_one_variable/MARv3.12-SMBcorr_ERA5_'+str(year)+'.nc')
+	
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [16]: 
+:end:
+
+**** Then extract monthly values for each year and all polygons
+Old for backup
+#+BEGIN_SRC ipython 
+<<load_libraries>>
+
+marpath = '/media/shl/Elements1/data/MARv3.12/monthly_1km/'
+
+gdf = gpd.read_file('shp/larocca/polygon_larocca_epsg3413.shp')
+
+melt = []
+years = []
+#year = 2000
+
+unique_name_column = 'new_ID'
+name = []
+for id in range(len(gdf[unique_name_column])):
+    name.append(gdf.iloc[id][unique_name_column])
+    
+snow = pd.DataFrame({'new_ID':name})
+rain = pd.DataFrame({'new_ID':name})
+temp = pd.DataFrame({'new_ID':name})
+smb = pd.DataFrame({'new_ID':name})
+runoff = pd.DataFrame({'new_ID':name})
+
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+    
+        print('processing year - month: '+ str(year) + ' - ' + str(month))
+        mar_annual = marpath+'/monthly_one_variable/MARv3.12-RF_ERA5_'+str(year)+'.nc'
+        variable = 'RF'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+
+
+    
+        stats = []
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+
+
+        rain[str(year)+'-'+str(month)] = stats
+
+        variable = 'SF'
+
+        mar_annual = marpath+'/monthly_one_variable/MARv3.12-SF_ERA5_'+str(year)+'.nc'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        snow[str(year)+'-'+str(month)] = stats
+
+        variable = 'T2Mcorr'
+
+        mar_annual = marpath+'/monthly_one_variable/MARv3.12-T2Mcorr_ERA5_'+str(year)+'.nc'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        temp[str(year)+'-'+str(month)] = stats
+
+        variable = 'SMBcorr'
+
+        mar_annual = marpath+'/monthly_one_variable/MARv3.12-SMBcorr_ERA5_'+str(year)+'.nc'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        smb[str(year)+'-'+str(month)] = stats
+
+        variable = 'RUcorr'
+
+        mar_annual = marpath+'/monthly_one_variable/MARv3.12-RUcorr_ERA5_'+str(year)+'.nc'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        runoff[str(year)+'-'+str(month)] = stats
+    
+snow.set_index('new_ID', inplace =True)   
+rain.set_index('new_ID', inplace =True)
+temp.set_index('new_ID', inplace =True)
+smb.set_index('new_ID', inplace =True)
+runoff.set_index('new_ID', inplace =True)
+
+temp_out = temp.T
+temp_out.index.name = 'year'
+temp.to_csv('results_larocca/MARv3.12_T2Mcorr_1950_2021_catchment_mean_of_monthly_mean.csv', index = True)
+
+snow_out = snow.T
+snow_out.index.name = 'year'
+snow.to_csv('results_larocca/MARv3.12_SF_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+rain_out = rain.T
+rain_out.index.name = 'year'
+rain.to_csv('results_larocca/MARv3.12_RF_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+smb_out = smb.T
+smb_out.index.name = 'year'
+smb.to_csv('results_larocca/MARv3.12_SMBcorr_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+runoff_out = runoff.T
+runoff_out.index.name = 'year'
+runoff.to_csv('results_larocca/MARv3.12_RUcorr_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+#+END_SRC
+
+New and in use
+#+BEGIN_SRC ipython :tangle extract_monthly.py
+<<load_libraries>>
+
+#marpath = '/media/shl/Elements1/data/MARv3.12/monthly_1km/'
+
+gdf = gpd.read_file('shp/larocca/polygon_larocca_epsg3413.shp')
+
+melt = []
+years = []
+#year = 2000
+
+unique_name_column = 'new_ID'
+name = []
+for id in range(len(gdf[unique_name_column])):
+    name.append(gdf.iloc[id][unique_name_column])
+    
+snow = pd.DataFrame({'new_ID':name})
+rain = pd.DataFrame({'new_ID':name})
+temp = pd.DataFrame({'new_ID':name})
+smb = pd.DataFrame({'new_ID':name})
+runoff = pd.DataFrame({'new_ID':name})
+
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+    
+        print('processing year - month: '+ str(year) + ' - ' + str(month))
+        mar_annual = 'monthly_one_variable/MARv3.12-RF_ERA5_'+str(year)+'.nc'
+        variable = 'RF'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+
+
+    
+        stats = []
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+
+
+        rain[str(year)+'-'+str(month)] = stats
+
+rain.set_index('new_ID', inplace =True)
+rain_out = rain.T
+rain_out.index.name = 'year'
+rain.to_csv('results_larocca/MARv3.12_RF_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+	
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+
+        variable = 'SF'
+
+        mar_annual = 'monthly_one_variable/MARv3.12-SF_ERA5_'+str(year)+'.nc'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        snow[str(year)+'-'+str(month)] = stats
+
+snow.set_index('new_ID', inplace =True)   
+snow_out = snow.T
+snow_out.index.name = 'year'
+snow.to_csv('results_larocca/MARv3.12_SF_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+
+        variable = 'T2Mcorr'
+
+        mar_annual = 'monthly_one_variable/MARv3.12-T2Mcorr_ERA5_'+str(year)+'.nc'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        temp[str(year)+'-'+str(month)] = stats
+
+temp.set_index('new_ID', inplace =True)
+temp_out = temp.T
+temp_out.index.name = 'year'
+temp.to_csv('results_larocca/MARv3.12_T2Mcorr_1950_2021_catchment_mean_of_monthly_mean.csv', index = True)
+
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+
+        variable = 'SMBcorr'
+
+        mar_annual = 'monthly_one_variable/MARv3.12-SMBcorr_ERA5_'+str(year)+'.nc'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        smb[str(year)+'-'+str(month)] = stats
+
+smb.set_index('new_ID', inplace =True)
+smb_out = smb.T
+smb_out.index.name = 'year'
+smb.to_csv('results_larocca/MARv3.12_SMBcorr_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+
+	
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+
+        variable = 'RUcorr'
+
+        mar_annual = 'monthly_one_variable/MARv3.12-RUcorr_ERA5_'+str(year)+'.nc'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = 1, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        runoff[str(year)+'-'+str(month)] = stats
+
+runoff.set_index('new_ID', inplace =True)
+runoff_out = runoff.T
+runoff_out.index.name = 'year'
+runoff.to_csv('results_larocca/MARv3.12_RUcorr_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+
+
+
+
+
+
+
+#+END_SRC
+
+
+#+BEGIN_SRC sh
+scp shp/larocca/polygon_larocca_epsg3413.* shl@glacio:/mnt/data/shl/data/MAR/3.12/shp/larocca/.
+
+scp extract_monthly.py shl@glacio:/mnt/data/shl/data/MAR/3.12
+#+END_SRC
+
+
+
+
+** Extracting data for Laura Larocca -see also above for v3.12
 
 De ønsker data så langt tilbage som muligt:
 
@@ -352,6 +744,111 @@ proj -l
 
 
 *** Udtræk data fra en ny MAR version
+
+#+BEGIN_SRC ipython
+import rioxarray as rio
+import xarray as xr
+import rasterstats as rs
+import geopandas as gpd
+
+
+year = 2000
+datapath = '/home/shl/data/MAR/MARv3.11/monthly/'
+filename = 'MARv3.11-monthly-ERA5-' 
+gdf = gpd.read_file('shp/larocca/split/new_ID_543.gpkg' )
+
+
+mar = datapath + filename +str(year)+'.nc'
+with xr.open_dataset(mar,decode_times=False) as raster:
+    ras = raster.T2M.data[1,:,:]
+    #affine = raster['T2M'].transform()
+    affine = raster['T2M'].rio.transform()
+    print(affine)
+    #affine = affine.to_gdal()
+    #print(affine)
+print(gdf)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [14]: 
+# output
+| 1000.00, 0.00,-720500.00|
+| 0.00, 1000.00,-3450500.00|
+| 0.00, 0.00, 1.00|
+   Join_Count  TARGET_FID  JOIN_FID           RGIId         GLIMSId   BgnDate  \
+0           1         486       542  RGI60-05.10631  G317451E82403N  19999999   
+
+    EndDate   CenLon   CenLat O1Region  ... Linkages  Name  new_ID  old_ID  \
+0  20049999 -42.5487  82.4026        5  ...        9  None     543       0   
+
+           RGI_ID  Region  CenLon_1  CenLat_1  Name_1  \
+0  RGI60-05.10631   north  -42.5487   82.4026    None   
+
+                                            geometry  
+0  MULTIPOLYGON (((35862.500 -822344.000, 35862.5...  
+
+[1 rows x 33 columns]
+
+:end:
+
+#+BEGIN_SRC ipython
+
+zone_stat = rs.zonal_stats(vectors=gdf['geometry'], raster=ras, affine = affine, stats='mean', all_touched = False)
+#print(zone_stat)
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [15]: 
+# output
+---------------------------------------------------------------------------
+ValueError                                Traceback (most recent call last)
+/tmp/ipykernel_33116/308277264.py in <module>
+----> 1 zone_stat = rs.zonal_stats(vectors=gdf['geometry'], raster=ras, affine = affine, stats='mean', all_touched = False)
+      2 #print(zone_stat)
+
+~/miniconda3/envs/py38/lib/python3.8/site-packages/rasterstats/main.py in zonal_stats(*args, **kwargs)
+     29     The only difference is that ``zonal_stats`` will
+     30     return a list rather than a generator."""
+---> 31     return list(gen_zonal_stats(*args, **kwargs))
+     32 
+     33 
+
+~/miniconda3/envs/py38/lib/python3.8/site-packages/rasterstats/main.py in gen_zonal_stats(vectors, raster, layer, band, nodata, affine, stats, all_touched, categorical, category_map, add_stats, zone_func, raster_out, prefix, geojson_out, **kwargs)
+    154             geom_bounds = tuple(geom.bounds)
+    155 
+--> 156             fsrc = rast.read(bounds=geom_bounds)
+    157 
+    158             # rasterized geometry
+
+~/miniconda3/envs/py38/lib/python3.8/site-packages/rasterstats/io.py in read(self, bounds, window, masked)
+    303         if self.array is not None:
+    304             # It's an ndarray already
+--> 305             new_array = boundless_array(
+    306                 self.array, window=win, nodata=nodata, masked=masked)
+    307         elif self.src:
+
+~/miniconda3/envs/py38/lib/python3.8/site-packages/rasterstats/io.py in boundless_array(arr, window, nodata, masked)
+    184 
+    185     # create an array of nodata values
+--> 186     out = np.ones(shape=window_shape) * nodata
+    187 
+    188     # Fill with data where overlapping
+
+~/miniconda3/envs/py38/lib/python3.8/site-packages/numpy/core/numeric.py in ones(shape, dtype, order, like)
+    201         return _ones_with_like(shape, dtype=dtype, order=order, like=like)
+    202 
+--> 203     a = empty(shape, dtype, order)
+    204     multiarray.copyto(a, 1, casting='unsafe')
+    205     return a
+
+ValueError: negative dimensions are not allowed
+:end:
+
+
+
 
 
 Problem with rioxarray and jupyter: Perhaps it will work with python
@@ -695,7 +1192,6 @@ Der er et problem med koordinatsystemet. Derfor tager jeg data og laver nye xarr
 **** Extract monthly values for each year
 
 
-***** Air temperature
  #+BEGIN_SRC jupyter-python :tangle extract_MARv3.5.py
 <<load_libraries>>
 
@@ -712,11 +1208,11 @@ filename = 'mar_'+reanalysis+'_Greenland5km_'
 
 
 ## AIR TEMP ###########################################
-variable = 'air_temp'
-<<extract_MARv3.5_variable>>
+#variable = 'air_temp'
+#<<extract_MARv3.5_variable>>
 
 ## SMB ################################################
-variable = 'SMB'
+variable = 'smb'
 <<extract_MARv3.5_variable>>
 
 ## RAIN ###############################################
@@ -765,13 +1261,13 @@ results = monthly_zone_stat.T
 results.index = pd.to_datetime(results.index, format = '%Y-%m')
 results.columns = name
 #print(results)
-results.to_csv('csvs/MAR_v3.5.2_20CRv2c_'+variable+'_monthly_mean.csv')
+results.to_csv('results_larocca/MAR_v3.5.2_20CRv2c_'+variable+'_monthly_mean.csv')
 results_annual = results.resample('Y').mean()
 #print(results_annual)
-results_annual.to_csv('csvs/MAR_v3.5.2_20CRv2c_'+variable+'_annual_mean.csv')
+results_annual.to_csv('results_larocca/MAR_v3.5.2_20CRv2c_'+variable+'_annual_mean.csv')
 results_annual = results.resample('Y').sum()
 #print(results_annual)
-results_annual.to_csv('csvs/MAR_v3.5.2_20CRv2c_'+variable+'_annual_sum.csv')
+results_annual.to_csv('results_larocca/MAR_v3.5.2_20CRv2c_'+variable+'_annual_sum.csv')
  #+END_SRC
 
   #+RESULTS:
@@ -1099,3 +1595,244 @@ results_annual.to_csv('csvs/MAR_v3.5.2_20CRv2c_'+variable+'_annual_sum.csv')
 
 
 *** Sammenlign data for de to forskellige modeller.
+
+**** Post processing of extracted csvs
+
+***** Anomalies for MAR v3.12
+#+BEGIN_SRC ipython
+<<load_libraries>>
+datapath = '/home/shl/OneDrive/projects/northgreenland/results_larocca/'
+#print(df)
+baseline_years = ['1971','1972','1973','1974','1975','1976','1977','1978','1979','1980','1981','1982','1983','1984','1985','1986','1987','1988','1989','1990','1991','1992','1993','1994','1995','1996','1997','1998','1999','2000']
+
+df=pd.read_csv(datapath+'MARv3.12_RF_1950_2021_catchment_mean_of_annual_sum.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.12_RF_1950_2021_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index= True)
+
+df=pd.read_csv(datapath+'MARv3.12_SF_1950_2021_catchment_mean_of_annual_sum.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.12_SF_1950_2021_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index= True)
+
+
+df=pd.read_csv(datapath+'MARv3.12_T2Mcorr_1950_2021_catchment_mean_of_annual_mean.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.12_T2Mcorr_1950_2021_catchment_mean_of_annual_mean_anomaly_from_1971_to_2000.csv', index= True)
+
+df=pd.read_csv(datapath+'MARv3.12_SMBcorr_1950_2021_catchment_mean_of_annual_sum.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.12_SMBcorr_1950_2021_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index= True)
+
+df=pd.read_csv(datapath+'MARv3.12_RUcorr_1950_2021_catchment_mean_of_annual_sum.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.12_RUcorr_1950_2021_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index= True)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [34]: 
+:end:
+
+***** Post processing of MARv3.5.2, to match the format of MARv3.12
+
+#+BEGIN_SRC ipython
+<<load_libraries>>
+datapath = '/home/shl/OneDrive/projects/northgreenland/results_larocca/'
+df=pd.read_csv(datapath+'MAR_v3.5.2_20CRv2c_air_temp_annual_mean.csv', index_col = 0)
+df.index = pd.to_datetime(df.index)
+df.index = df.index.year
+df = df.T
+df.index.name = 'new_ID'
+df.to_csv(datapath+'MARv3.5.2_20CRv2c_TT_catchment_mean_of_annual_mean.csv', index = True)
+
+
+df=pd.read_csv(datapath+'MAR_v3.5.2_20CRv2c_rain_fall_annual_sum.csv', index_col = 0)
+df.index = pd.to_datetime(df.index)
+df.index = df.index.year
+df = df.T
+df.index.name = 'new_ID'
+df.to_csv(datapath+'MARv3.5.2_20CRv2c_RF_catchment_mean_of_annual_sum.csv', index = True)
+
+df=pd.read_csv(datapath+'MAR_v3.5.2_20CRv2c_snow_fall_annual_sum.csv', index_col = 0)
+df.index = pd.to_datetime(df.index)
+df.index = df.index.year
+df = df.T
+df.index.name = 'new_ID'
+df.to_csv(datapath+'MARv3.5.2_20CRv2c_SF_catchment_mean_of_annual_sum.csv', index = True)
+
+df=pd.read_csv(datapath+'MAR_v3.5.2_20CRv2c_smb_annual_sum.csv', index_col = 0)
+df.index = pd.to_datetime(df.index)
+df.index = df.index.year
+df = df.T
+df.index.name = 'new_ID'
+df.to_csv(datapath+'MARv3.5.2_20CRv2c_SMB_catchment_mean_of_annual_sum.csv', index = True)
+
+
+df=pd.read_csv(datapath+'MAR_v3.5.2_20CRv2c_runoff_annual_sum.csv', index_col = 0)
+df.index = pd.to_datetime(df.index)
+df.index = df.index.year
+df = df.T
+df.index.name = 'new_ID'
+df.to_csv(datapath+'MARv3.5.2_20CRv2c_RU_catchment_mean_of_annual_sum.csv', index = True)
+
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [2]: 
+:end:
+
+
+
+Old name: MAR_v3.5.2_20CRv2c_air_temp_annual_mean.csv
+New name: MARv3.5.2_20CRv2c_TT_catchment_mean_of_annual_mean.csv
+
+MAR_v3.5.2_20CRv2c_rain_fall_annual_sum.csv
+MARv3.5.2_20CRv2c_RF_catchment_mean_of_annual_sum.csv
+
+MAR_v3.5.2_20CRv2c_snow_fall_annual_sum.csv
+MARv3.5.2_20CRv2c_SF_catchment_mean_of_annual_sum.csv
+
+MAR_v3.5.2_20CRv2c_smb_annual_sum.csv
+MARv3.5.2_20CRv2c_SMB_catchment_mean_of_annual_sum.csv
+
+MAR_v3.5.2_20CRv2c_runoff_annual_sum.csv
+MARv3.5.2_20CRv2c_RU_catchment_mean_of_annual_sum.csv
+
+
+
+#+BEGIN_SRC ipython
+<<load_libraries>>
+datapath = '/home/shl/OneDrive/projects/northgreenland/results_larocca/'
+#
+baseline_years = ['1971','1972','1973','1974','1975','1976','1977','1978','1979','1980','1981','1982','1983','1984','1985','1986','1987','1988','1989','1990','1991','1992','1993','1994','1995','1996','1997','1998','1999','2000']
+
+df=pd.read_csv(datapath+'MARv3.5.2_20CRv2c_TT_catchment_mean_of_annual_mean.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.5.2_20CRv2c_TT_catchment_mean_of_annual_mean_anomaly_from_1971_to_2000.csv', index= True)
+
+
+
+df=pd.read_csv(datapath+'MARv3.5.2_20CRv2c_SF_catchment_mean_of_annual_sum.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.5.2_20CRv2c_TT_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index= True)
+
+
+df=pd.read_csv(datapath+'MARv3.5.2_20CRv2c_RF_catchment_mean_of_annual_sum.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.5.2_20CRv2c_RF_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index= True)
+
+df=pd.read_csv(datapath+'MARv3.5.2_20CRv2c_SMB_catchment_mean_of_annual_sum.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.5.2_20CRv2c_SMB_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index= True)
+
+df=pd.read_csv(datapath+'MARv3.5.2_20CRv2c_RU_catchment_mean_of_annual_sum.csv', index_col = 0)
+mean71_20 = pd.DataFrame(df[baseline_years].mean(axis = 1))
+df_anomaly = df-mean71_20.values
+df_anomaly.to_csv(datapath+'MARv3.5.2_20CRv2c_RU_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index= True)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [5]: 
+:end:
+
+
+
+**** Plot eksempler på anomalier
+
+#+BEGIN_SRC ipython
+<<load_libraries>>
+datapath = '/home/shl/OneDrive/projects/northgreenland/results_larocca/'
+df_new=pd.read_csv(datapath+'MARv3.12_T2Mcorr_1950_2021_catchment_mean_of_annual_mean_anomaly_from_1971_to_2000.csv', index_col = 0)
+df_hist = pd.read_csv(datapath+ 'MARv3.5.2_20CRv2c_TT_catchment_mean_of_annual_mean_anomaly_from_1971_to_2000.csv', index_col = 0)
+df_new = df_new.T
+#df_new = df_new.sort_index(axis=0)
+df_new.index = pd.to_datetime(df_new.index, format = '%Y')
+
+df_hist = df_hist.T
+#df_hist = df_hist.sort_index(axis=0)
+df_hist.index = pd.to_datetime(df_hist.index, format = '%Y')
+
+
+
+fig,ax = plt.subplots(1,1, figsize = (10,5))
+ax.plot(df_new.index, df_new[134].values, label = 'ERA5')
+ax.plot(df_hist.index, df_hist[134].values, label = '20CRv2c')
+ax.legend()
+fig.savefig('results_larocca/anomal_air_temp_134.png', dpi = 300)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [6]: 
+# text/plain
+: <Figure size 720x360 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/68d950e702deb563c067af145c1a8d6ea5c9eb17/2ca99864cd737c0ebdc5f0f4a248aa4f7194d7a7.png]]
+:end:
+
+
+#+BEGIN_SRC ipython
+<<load_libraries>>
+datapath = '/home/shl/OneDrive/projects/northgreenland/results_larocca/'
+df_new=pd.read_csv(datapath+'MARv3.12_RUcorr_1950_2021_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index_col = 0)
+df_hist = pd.read_csv(datapath+ 'MARv3.5.2_20CRv2c_RU_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index_col = 0)
+df_new = df_new.T
+#df_new = df_new.sort_index(axis=0)
+df_new.index = pd.to_datetime(df_new.index, format = '%Y')
+
+df_hist = df_hist.T
+#df_hist = df_hist.sort_index(axis=0)
+df_hist.index = pd.to_datetime(df_hist.index, format = '%Y')
+
+
+
+fig,ax = plt.subplots(1,1, figsize = (10,5))
+ax.plot(df_new.index, df_new[134].values, label = 'ERA5')
+ax.plot(df_hist.index, df_hist[134].values, label = '20CRv2c')
+ax.legend()
+fig.savefig('results_larocca/anomal_RU_133.png', dpi = 300)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [15]: 
+# text/plain
+: <Figure size 720x360 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/68d950e702deb563c067af145c1a8d6ea5c9eb17/08442f0914d5e628bbb94a1749bd2cb0e325f9c5.png]]
+:end:
+
+
+#+BEGIN_SRC ipython
+datapath = '/home/shl/OneDrive/projects/northgreenland/results_larocca/'
+df=pd.read_csv(datapath+'MARv3.5.2_20CRv2c_RU_catchment_mean_of_annual_sum.csv', index_col = 0)
+df_anomaly = pd.read_csv(datapath+ 'MARv3.5.2_20CRv2c_RU_catchment_mean_of_annual_sum_anomaly_from_1971_to_2000.csv', index_col = 0)
+df['1900'].plot()
+df_anomaly['1900'].plot()
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [13]: 
+# text/plain
+: <AxesSubplot:xlabel='new_ID'>
+
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/68d950e702deb563c067af145c1a8d6ea5c9eb17/4d725d0e9b72d00cdb4d7df8dce743a9c488ff7d.png]]
+:end:
