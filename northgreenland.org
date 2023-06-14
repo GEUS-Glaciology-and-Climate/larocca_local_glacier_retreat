@@ -50,7 +50,7 @@ import rasterstats as rs
 
 
 
-*** Extract data
+*** Extract data Also for Larocca
 #+BEGIN_SRC ipython
 <<load_libraries>>
 #+END_SRC
@@ -404,6 +404,180 @@ for year in range(1950,2022):
 :end:
 
 **** Then extract monthly values for each year and all polygons
+
+New and in use
+
+#+NAME: extract_monthly_header
+#+BEGIN_SRC jupyter-python 
+<<load_libraries>>
+
+datapath = '/mnt/data/shl/data/MAR/3.12/' #'/media/shl/Elements1/data/MARv3.12/monthly_1km/'
+
+gdf = gpd.read_file('shp/larocca/extra/west_avriel_additions_polygons_epsg3413.shp')
+
+melt = []
+years = []
+#year = 2000
+
+unique_name_column = 'RGIId'
+name = []
+for id in range(len(gdf[unique_name_column])):
+    name.append(gdf.iloc[id][unique_name_column])
+    
+
+#+END_SRC
+
+#+BEGIN_SRC jupyter-python :tangle extract_monthly_rain.py
+<<extract_monthly_header>>
+rain = pd.DataFrame({'new_ID':name})
+for year in range(1950,2021+1): #2022
+    for month in range(1,12+1):
+    
+        mar_annual = datapath+'monthly_one_variable/MARv3.12-RF_ERA5_'+str(year)+'.nc'
+        print('processing year - month: '+ str(year) + ' - ' + str(month))
+        variable = 'RF'
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = month, all_touched = True)
+
+
+    
+        stats = []
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+
+
+        rain[str(year)+'-'+str(month)] = stats
+
+rain.set_index('new_ID', inplace =True)
+#print(rain.head)
+#rain_out = rain.T
+#rain_out.index.name = 'year'
+rain.to_csv('results_larocca/MARv3.12_RF_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+#+END_SRC
+        
+#+BEGIN_SRC jupyter-python :tangle extract_monthly_snow.py
+<<extract_monthly_header>>
+snow = pd.DataFrame({'new_ID':name})
+
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+
+        variable = 'SF'
+
+        mar_annual = datapath+'monthly_one_variable/MARv3.12-SF_ERA5_'+str(year)+'.nc'
+        print('processing year - month: '+ str(year) + ' - ' + str(month))
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = month, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        snow[str(year)+'-'+str(month)] = stats
+
+snow.set_index('new_ID', inplace =True)   
+#snow_out = snow.T
+#snow_out.index.name = 'year'
+snow.to_csv('results_larocca/MARv3.12_SF_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+#+END_SRC
+
+#+BEGIN_SRC jupyter-python :tangle extract_monthly_temp.py
+<<extract_monthly_header>>
+temp = pd.DataFrame({'new_ID':name})
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+
+        variable = 'T2Mcorr'
+
+        mar_annual = datapath+'monthly_one_variable/MARv3.12-T2Mcorr_ERA5_'+str(year)+'.nc'
+        print('processing year - month: '+ str(year) + ' - ' + str(month))
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = month, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        temp[str(year)+'-'+str(month)] = stats
+
+temp.set_index('new_ID', inplace =True)
+#temp_out = temp.T
+#temp_out.index.name = 'year'
+temp.to_csv('results_larocca/MARv3.12_T2Mcorr_1950_2021_catchment_mean_of_monthly_mean.csv', index = True)
+
+#+END_SRC
+
+#+BEGIN_SRC jupyter-python :tangle extract_monthly_smb.py
+<<extract_monthly_header>>
+smb = pd.DataFrame({'new_ID':name})
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+
+        variable = 'SMBcorr'
+
+        mar_annual = datapath+'monthly_one_variable/MARv3.12-SMBcorr_ERA5_'+str(year)+'.nc'
+        print('processing year - month: '+ str(year) + ' - ' + str(month))
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = month, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        smb[str(year)+'-'+str(month)] = stats
+
+smb.set_index('new_ID', inplace =True)
+#smb_out = smb.T
+#smb_out.index.name = 'year'
+smb.to_csv('results_larocca/MARv3.12_SMBcorr_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+#+END_SRC
+
+#+BEGIN_SRC jupyter-python :tangle extract_monthly_runoff.py
+<<extract_monthly_header>>
+runoff = pd.DataFrame({'new_ID':name})	
+for year in range(1950,2022): #2022
+    for month in range(1,12+1):
+
+        variable = 'RUcorr'
+
+        mar_annual = datapath+'monthly_one_variable/MARv3.12-RUcorr_ERA5_'+str(year)+'.nc'
+        print('processing year - month: '+ str(year) + ' - ' + str(month))
+        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
+                               raster='netcdf:'+mar_annual+':'+variable,
+                               stats='mean',
+                               band = month, all_touched = True)
+        stats = []
+    
+        for id in range(len(zone_stat)):
+            stats.append(zone_stat[id]['mean'])
+    
+        runoff[str(year)+'-'+str(month)] = stats
+
+runoff.set_index('new_ID', inplace =True)
+#runoff_out = runoff.T
+#runoff_out.index.name = 'year'
+runoff.to_csv('results_larocca/MARv3.12_RUcorr_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
+
+#+END_SRC
+
+
+#+BEGIN_SRC sh
+scp shp/larocca/polygon_larocca_epsg3413.* shl@glacio:/mnt/data/shl/data/MAR/3.12/shp/larocca/.
+
+scp extract_monthly.py shl@glacio:/mnt/data/shl/data/MAR/3.12
+#+END_SRC
+
+
 Old for backup
 #+BEGIN_SRC ipython 
 <<load_libraries>>
@@ -436,7 +610,7 @@ for year in range(1950,2022): #2022
         zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
                                raster='netcdf:'+mar_annual+':'+variable,
                                stats='mean',
-                               band = 1, all_touched = True)
+                               band = month, all_touched = True)
 
 
     
@@ -453,7 +627,7 @@ for year in range(1950,2022): #2022
         zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
                                raster='netcdf:'+mar_annual+':'+variable,
                                stats='mean',
-                               band = 1, all_touched = True)
+                               band = month, all_touched = True)
         stats = []
     
         for id in range(len(zone_stat)):
@@ -467,7 +641,7 @@ for year in range(1950,2022): #2022
         zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
                                raster='netcdf:'+mar_annual+':'+variable,
                                stats='mean',
-                               band = 1, all_touched = True)
+                               band = month, all_touched = True)
         stats = []
     
         for id in range(len(zone_stat)):
@@ -481,7 +655,7 @@ for year in range(1950,2022): #2022
         zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
                                raster='netcdf:'+mar_annual+':'+variable,
                                stats='mean',
-                               band = 1, all_touched = True)
+                               band = month, all_touched = True)
         stats = []
     
         for id in range(len(zone_stat)):
@@ -495,7 +669,7 @@ for year in range(1950,2022): #2022
         zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
                                raster='netcdf:'+mar_annual+':'+variable,
                                stats='mean',
-                               band = 1, all_touched = True)
+                               band = month, all_touched = True)
         stats = []
     
         for id in range(len(zone_stat)):
@@ -528,162 +702,6 @@ smb.to_csv('results_larocca/MARv3.12_SMBcorr_1950_2021_catchment_mean_of_monthly
 runoff_out = runoff.T
 runoff_out.index.name = 'year'
 runoff.to_csv('results_larocca/MARv3.12_RUcorr_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
-#+END_SRC
-
-New and in use
-#+BEGIN_SRC ipython :tangle extract_monthly.py
-<<load_libraries>>
-
-#marpath = '/media/shl/Elements1/data/MARv3.12/monthly_1km/'
-
-gdf = gpd.read_file('shp/larocca/polygon_larocca_epsg3413.shp')
-
-melt = []
-years = []
-#year = 2000
-
-unique_name_column = 'new_ID'
-name = []
-for id in range(len(gdf[unique_name_column])):
-    name.append(gdf.iloc[id][unique_name_column])
-    
-snow = pd.DataFrame({'new_ID':name})
-rain = pd.DataFrame({'new_ID':name})
-temp = pd.DataFrame({'new_ID':name})
-smb = pd.DataFrame({'new_ID':name})
-runoff = pd.DataFrame({'new_ID':name})
-
-for year in range(1950,2022): #2022
-    for month in range(1,12+1):
-    
-        print('processing year - month: '+ str(year) + ' - ' + str(month))
-        mar_annual = 'monthly_one_variable/MARv3.12-RF_ERA5_'+str(year)+'.nc'
-        variable = 'RF'
-        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
-                               raster='netcdf:'+mar_annual+':'+variable,
-                               stats='mean',
-                               band = 1, all_touched = True)
-
-
-    
-        stats = []
-        for id in range(len(zone_stat)):
-            stats.append(zone_stat[id]['mean'])
-
-
-        rain[str(year)+'-'+str(month)] = stats
-
-rain.set_index('new_ID', inplace =True)
-rain_out = rain.T
-rain_out.index.name = 'year'
-rain.to_csv('results_larocca/MARv3.12_RF_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
-
-	
-for year in range(1950,2022): #2022
-    for month in range(1,12+1):
-
-        variable = 'SF'
-
-        mar_annual = 'monthly_one_variable/MARv3.12-SF_ERA5_'+str(year)+'.nc'
-        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
-                               raster='netcdf:'+mar_annual+':'+variable,
-                               stats='mean',
-                               band = 1, all_touched = True)
-        stats = []
-    
-        for id in range(len(zone_stat)):
-            stats.append(zone_stat[id]['mean'])
-    
-        snow[str(year)+'-'+str(month)] = stats
-
-snow.set_index('new_ID', inplace =True)   
-snow_out = snow.T
-snow_out.index.name = 'year'
-snow.to_csv('results_larocca/MARv3.12_SF_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
-
-
-for year in range(1950,2022): #2022
-    for month in range(1,12+1):
-
-        variable = 'T2Mcorr'
-
-        mar_annual = 'monthly_one_variable/MARv3.12-T2Mcorr_ERA5_'+str(year)+'.nc'
-        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
-                               raster='netcdf:'+mar_annual+':'+variable,
-                               stats='mean',
-                               band = 1, all_touched = True)
-        stats = []
-    
-        for id in range(len(zone_stat)):
-            stats.append(zone_stat[id]['mean'])
-    
-        temp[str(year)+'-'+str(month)] = stats
-
-temp.set_index('new_ID', inplace =True)
-temp_out = temp.T
-temp_out.index.name = 'year'
-temp.to_csv('results_larocca/MARv3.12_T2Mcorr_1950_2021_catchment_mean_of_monthly_mean.csv', index = True)
-
-for year in range(1950,2022): #2022
-    for month in range(1,12+1):
-
-        variable = 'SMBcorr'
-
-        mar_annual = 'monthly_one_variable/MARv3.12-SMBcorr_ERA5_'+str(year)+'.nc'
-        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
-                               raster='netcdf:'+mar_annual+':'+variable,
-                               stats='mean',
-                               band = 1, all_touched = True)
-        stats = []
-    
-        for id in range(len(zone_stat)):
-            stats.append(zone_stat[id]['mean'])
-    
-        smb[str(year)+'-'+str(month)] = stats
-
-smb.set_index('new_ID', inplace =True)
-smb_out = smb.T
-smb_out.index.name = 'year'
-smb.to_csv('results_larocca/MARv3.12_SMBcorr_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
-
-
-	
-for year in range(1950,2022): #2022
-    for month in range(1,12+1):
-
-        variable = 'RUcorr'
-
-        mar_annual = 'monthly_one_variable/MARv3.12-RUcorr_ERA5_'+str(year)+'.nc'
-        zone_stat = rs.zonal_stats(vectors=gdf['geometry'],
-                               raster='netcdf:'+mar_annual+':'+variable,
-                               stats='mean',
-                               band = 1, all_touched = True)
-        stats = []
-    
-        for id in range(len(zone_stat)):
-            stats.append(zone_stat[id]['mean'])
-    
-        runoff[str(year)+'-'+str(month)] = stats
-
-runoff.set_index('new_ID', inplace =True)
-runoff_out = runoff.T
-runoff_out.index.name = 'year'
-runoff.to_csv('results_larocca/MARv3.12_RUcorr_1950_2021_catchment_mean_of_monthly_sum.csv', index = True)
-
-
-
-
-
-
-
-
-#+END_SRC
-
-
-#+BEGIN_SRC sh
-scp shp/larocca/polygon_larocca_epsg3413.* shl@glacio:/mnt/data/shl/data/MAR/3.12/shp/larocca/.
-
-scp extract_monthly.py shl@glacio:/mnt/data/shl/data/MAR/3.12
 #+END_SRC
 
 
