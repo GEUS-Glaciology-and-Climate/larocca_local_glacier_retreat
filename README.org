@@ -1,0 +1,7 @@
+#+TITLE: Extracting data from the regional climate model MAR   
+#+AUTHOR: Signe Hillerup Larsen
+#+EMAIL: shl@geus.dk
+#+DATE: {{{time(%Y-%m-%d)}}}
+#+DESCRIPTION: Extract data from MAR using a shapefile with polygons
+
+Please see code.org for description.
