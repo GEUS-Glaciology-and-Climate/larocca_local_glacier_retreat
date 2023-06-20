@@ -1,7 +1,17 @@
-#+TITLE: Extracting data from MAR   
-#+AUTHOR: Signe Hillerup Larsen
+#+TITLE: Larocca et al., in review. Greenland–wide accelerated retreat of local glaciers in the twenty–first century.    
+#+AUTHOR: Laura Larocca and Signe Hillerup Larsen
 #+EMAIL: shl@geus.dk
 #+DATE: {{{time(%Y-%m-%d)}}}
-#+DESCRIPTION: Extract data from MAR using a shapefile with polygons
+#+DESCRIPTION: 
 
-Please see code.org for description.
+** This repository contains:
+Scripts used for data analysis in the paper: Greenland–wide accelerated retreat of local glaciers in the twenty–first century. Larocca et al., in review. And includes:
+
+- Script for extarcting MAR data using a shapefile with polygons of local glacier catchments in Greenland. 
+- The R script used to processes the data 
+
+** Data
+The data for this study can be found here: Not yet publicly available
+
+** Open science 
+This repository it is intended to support open science, but the code is necessarily reproducible without user adjustments.
