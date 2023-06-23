@@ -32,7 +32,7 @@ JJAtemp_yearmean <- JJAtemp_yearmean[!(JJAtemp_yearmean$year=="2020" | JJAtemp_y
 decade <- rep(c("1950-59", "1960-69", "1970-79", "1980-89", "1990-99", "2000-09", "2010-19"), each=10)
 decade <- data.frame(decade)
 decade <- decade %>% 
-  slice(rep(1:n(), 978))
+  slice(rep(1:n(), 977))
 JJAtemp_yearmean <- cbind(JJAtemp_yearmean, decade)
 
 # Compute decadal mean JJA temperature by RGI ID
@@ -60,6 +60,14 @@ JJAtemp_decademean$anom_1971_2000 <- (JJAtemp_decademean$JJAdecade_mean - JJAtem
 # Remove JJAmean1971_2000 column 
 JJAtemp_decademean = subset(JJAtemp_decademean, select = -c(JJAmean1971_2000) )
 
+# Add lat, lon locations and rename columns. Result is the data file, MAR_SummerTemperature
+MAR_SummerTemperature <- merge(JJAtemp_decademean, MAR_MonthlyTemperature[, 1:4], by = "RGI_ID")
+colnames(MAR_SummerTemperature)[colnames(MAR_SummerTemperature) == "JJAdecade_mean"] <- "JJA_Temp"
+colnames(MAR_SummerTemperature)[colnames(MAR_SummerTemperature) == "anom_1971_2000"] <- "JJA_Temp_anomaly"
+colnames(MAR_SummerTemperature)[colnames(MAR_SummerTemperature) == "decade"] <- "DECADE"
+custom_order <- c("RGI_ID", "REGION", "LAT", "LON", "DECADE",  "JJA_Temp", "JJA_Temp_anomaly")
+MAR_SummerTemperature <- MAR_SummerTemperature[, match(custom_order, names(MAR_SummerTemperature))]
+
 ###
 
 # Import MAR_MonthlySF data file
@@ -83,7 +91,7 @@ SF_yearsum <- SF_yearsum[!(SF_yearsum$year=="2020" | SF_yearsum$year=="2021"),]
 decade <- rep(c("1950-59", "1960-69", "1970-79", "1980-89", "1990-99", "2000-09", "2010-19"), each=10)
 decade <- data.frame(decade)
 decade <- decade %>% 
-  slice(rep(1:n(), 978))
+  slice(rep(1:n(), 977))
 SF_yearsum <- cbind(SF_yearsum, decade)
 
 # Compute decadal mean SF sum by RGI ID
@@ -110,6 +118,14 @@ SF_decademean$anom_1971_2000 <- (SF_decademean$SFdecade_mean - SF_decademean$SFm
 
 # Remove SFmean1971_2000 column
 SF_decademean = subset(SF_decademean, select = -c(SFmean1971_2000) )
+
+# Add lat, lon locations and rename columns. Result is the data file, MAR_Snowfall
+MAR_Snowfall <- merge(SF_decademean, MAR_MonthlySnowfall[, 1:4], by = "RGI_ID")
+colnames(MAR_Snowfall)[colnames(MAR_Snowfall) == "SFdecade_mean"] <- "SF"
+colnames(MAR_Snowfall)[colnames(MAR_Snowfall) == "anom_1971_2000"] <- "SF_anomaly"
+colnames(MAR_Snowfall)[colnames(MAR_Snowfall) == "decade"] <- "DECADE"
+custom_order <- c("RGI_ID", "REGION", "LAT", "LON", "DECADE",  "SF", "SF_anomaly")
+MAR_Snowfall <- MAR_Snowfall[, match(custom_order, names(MAR_Snowfall))]
 
 ###
 
@@ -162,3 +178,10 @@ SMB_decademean$anom_1971_2000 <- (SMB_decademean$SMBdecade_mean - SMB_decademean
 # Remove SMBmean1971_2000 column
 SMB_decademean = subset(SMB_decademean, select = -c(SMBmean1971_2000) )
 
+# Rename columns. Result is the data file, MAR_SMB
+colnames(SMB_decademean)[colnames(SMB_decademean) == "SMBdecade_mean"] <- "SMB"
+colnames(SMB_decademean)[colnames(SMB_decademean) == "anom_1971_2000"] <- "SMB_anomaly"
+colnames(SMB_decademean)[colnames(SMB_decademean) == "decade"] <- "DECADE"
+MAR_SMB <- SMB_decademean
+
+###
